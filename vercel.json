@@ -11,7 +11,5 @@
       "src": "/(.*)",
       "dest": "/app.py"
     }
-  ],
-  "buildCommand": "pip install -r requirements.txt && python -c \"from autorom import AutoROM; AutoROM(accept_license=True)\"",
-  "installCommand": "pip install -r requirements.txt"
+  ]
 }
