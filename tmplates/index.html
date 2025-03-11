@@ -1,0 +1,219 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Invaders Web App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #222;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #game-container {
+            margin: 20px auto;
+            position: relative;
+        }
+        #game-image {
+            border: 2px solid #444;
+            image-rendering: pixelated;
+            max-width: 100%;
+        }
+        #score-display {
+            font-size: 24px;
+            margin: 10px 0;
+            color: #0f0;
+        }
+        #controls {
+            margin: 15px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .action-btn {
+            margin: 5px;
+            width: 70px;
+        }
+        #instructions {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #333;
+            border-radius: 5px;
+            text-align: left;
+        }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: red;
+            text-shadow: 2px 2px 4px #000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Space Invaders Web App</h1>
+        
+        <div id="controls">
+            <button id="start-button">ゲーム開始</button>
+        </div>
+        
+        <div id="score-display">スコア: 0</div>
+        
+        <div id="game-container">
+            <img id="game-image" alt="Game Screen" width="420">
+            <div id="game-over-text" class="game-over">GAME OVER</div>
+        </div>
+        
+        <div id="game-controls">
+            <button class="action-btn" data-action="1">左</button>
+            <button class="action-btn" data-action="0">NOOP</button>
+            <button class="action-btn" data-action="3">右</button>
+            <button class="action-btn" data-action="4">発射</button>
+        </div>
+        
+        <div id="instructions">
+            <h3>操作方法:</h3>
+            <p>「左」: 左に移動</p>
+            <p>「右」: 右に移動</p>
+            <p>「発射」: 弾を発射</p>
+            <p>「NOOP」: アクションなし</p>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let gameActive = false;
+
+        document.getElementById('start-button').addEventListener('click', startGame);
+        
+        const actionButtons = document.querySelectorAll('.action-btn');
+        actionButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (gameActive) {
+                    const action = parseInt(button.getAttribute('data-action'));
+                    takeAction(action);
+                }
+            });
+        });
+
+        // キーボード操作のサポート
+        document.addEventListener('keydown', (event) => {
+            if (!gameActive) return;
+            
+            let action = null;
+            switch(event.key) {
+                case 'ArrowLeft':
+                    action = 1; // 左
+                    break;
+                case 'ArrowRight':
+                    action = 3; // 右
+                    break;
+                case ' ':
+                case 'ArrowUp':
+                    action = 4; // 発射
+                    break;
+            }
+            
+            if (action !== null) {
+                takeAction(action);
+                event.preventDefault();
+            }
+        });
+
+        function startGame() {
+            // ゲームをリセット
+            document.getElementById('game-over-text').style.display = 'none';
+            document.getElementById('score-display').textContent = 'スコア: 0';
+            
+            // 前のセッションをクリーンアップ
+            if (sessionId) {
+                fetch('/cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+            }
+            
+            // 新しいゲームを開始
+            fetch('/start_game', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                sessionId = data.session_id;
+                gameActive = true;
+                updateGameDisplay(data);
+                document.getElementById('start-button').textContent = 'ゲームリスタート';
+            })
+            .catch(error => console.error('Error starting game:', error));
+        }
+
+        function takeAction(action) {
+            if (!sessionId) return;
+            
+            fetch('/take_action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId, action: action })
+            })
+            .then(response => response.json())
+            .then(data => {
+                updateGameDisplay(data);
+                
+                if (data.game_over) {
+                    gameActive = false;
+                    document.getElementById('game-over-text').style.display = 'block';
+                }
+            })
+            .catch(error => console.error('Error taking action:', error));
+        }
+
+        function updateGameDisplay(data) {
+            if (data.image) {
+                document.getElementById('game-image').src = 'data:image/png;base64,' + data.image;
+            }
+            document.getElementById('score-display').textContent = 'スコア: ' + data.score;
+        }
+
+        // ページを離れる前にリソースをクリーンアップ
+        window.addEventListener('beforeunload', () => {
+            if (sessionId) {
+                fetch('/cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId }),
+                    keepalive: true
+                });
+            }
+        });
+    </script>
+</body>
+</html>
