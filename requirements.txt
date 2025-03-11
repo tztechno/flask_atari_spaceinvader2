@@ -5,4 +5,4 @@ stable-baselines3[extra]
 autorom
 pillow
 numpy
-!AutoROM --accept-license
+AutoROM --accept-license
